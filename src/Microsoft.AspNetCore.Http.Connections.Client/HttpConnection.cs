@@ -295,7 +295,6 @@ namespace Microsoft.AspNetCore.Http.Connections.Client
             _accessTokenProvider = _httpConnectionOptions.AccessTokenProvider;
 
             List<Exception> transportExceptions = null;
-            IList<AvailableTransport> serverTransports = null;
 
             if (_httpConnectionOptions.SkipNegotiation)
             {
@@ -347,18 +346,19 @@ namespace Microsoft.AspNetCore.Http.Connections.Client
                 // we don't understand in the negotiate response.
                 var transferFormatString = transferFormat.ToString();
 
-                serverTransports = negotiationResponse.AvailableTransports;
-                foreach (var transport in serverTransports)
+                foreach (var transport in negotiationResponse.AvailableTransports)
                 {
                     if (!Enum.TryParse<HttpTransportType>(transport.Transport, out var transportType))
                     {
                         Log.TransportNotSupported(_logger, transport.Transport);
+                        AddException($"{transport.Transport} is not supported by the client.");
                         continue;
                     }
 
                     if (transportType == HttpTransportType.WebSockets && !IsWebSocketsSupported())
                     {
                         Log.WebSocketsNotSupportedByOperatingSystem(_logger);
+                        AddException("WebSockets is not supported on this operating system.");
                         continue;
                     }
 
@@ -367,10 +367,12 @@ namespace Microsoft.AspNetCore.Http.Connections.Client
                         if ((transportType & _httpConnectionOptions.Transports) == 0)
                         {
                             Log.TransportDisabledByClient(_logger, transportType);
+                            AddException($"{transportType} is disabled by the client.");
                         }
                         else if (!transport.TransferFormats.Contains(transferFormatString, StringComparer.Ordinal))
                         {
                             Log.TransportDoesNotSupportTransferFormat(_logger, transportType, transferFormat);
+                            AddException($"{transportType} does not support '{transferFormat}' format.");
                         }
                         else
                         {
@@ -390,11 +392,7 @@ namespace Microsoft.AspNetCore.Http.Connections.Client
                     {
                         Log.TransportFailed(_logger, transportType, ex);
 
-                        if (transportExceptions == null)
-                        {
-                            transportExceptions = new List<Exception>();
-                        }
-                        transportExceptions.Add(new Exception($"{transportType} failed: {ex.Message}"));
+                        AddException($"{transportType} failed: {ex.Message}");
 
                         // Try the next transport
                         // Clear the negotiation response so we know to re-negotiate.
@@ -409,13 +407,17 @@ namespace Microsoft.AspNetCore.Http.Connections.Client
                 {
                     throw new AggregateException("Unable to connect to the server with any of the available transports.", transportExceptions);
                 } else {
-                    var transports = "";
-                    foreach (var transport in serverTransports)
-                    {
-                        transports += $"{transport.Transport},";
-                    }
-                    throw new InvalidOperationException($"The client does not support any of the transports supported by the server. The server supports '{transports.TrimEnd(',')}'.");
+                    throw new InvalidOperationException("Unable to connect to the server with any of the available transports.");
                 }
+            }
+
+            void AddException(string exceptionMessage)
+            {
+                if (transportExceptions == null)
+                {
+                    transportExceptions = new List<Exception>();
+                }
+                transportExceptions.Add(new Exception(exceptionMessage));
             }
         }
 
