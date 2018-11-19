@@ -294,6 +294,9 @@ namespace Microsoft.AspNetCore.Http.Connections.Client
             // Set the initial access token provider back to the original one from options
             _accessTokenProvider = _httpConnectionOptions.AccessTokenProvider;
 
+            List<Exception> transportExceptions = null;
+            IList<AvailableTransport> serverTransports = null;
+
             if (_httpConnectionOptions.SkipNegotiation)
             {
                 if (_httpConnectionOptions.Transports == HttpTransportType.WebSockets)
@@ -344,7 +347,8 @@ namespace Microsoft.AspNetCore.Http.Connections.Client
                 // we don't understand in the negotiate response.
                 var transferFormatString = transferFormat.ToString();
 
-                foreach (var transport in negotiationResponse.AvailableTransports)
+                serverTransports = negotiationResponse.AvailableTransports;
+                foreach (var transport in serverTransports)
                 {
                     if (!Enum.TryParse<HttpTransportType>(transport.Transport, out var transportType))
                     {
@@ -385,6 +389,13 @@ namespace Microsoft.AspNetCore.Http.Connections.Client
                     catch (Exception ex)
                     {
                         Log.TransportFailed(_logger, transportType, ex);
+
+                        if (transportExceptions == null)
+                        {
+                            transportExceptions = new List<Exception>();
+                        }
+                        transportExceptions.Add(new Exception($"{transportType} failed: {ex.Message}"));
+
                         // Try the next transport
                         // Clear the negotiation response so we know to re-negotiate.
                         negotiationResponse = null;
@@ -394,7 +405,17 @@ namespace Microsoft.AspNetCore.Http.Connections.Client
 
             if (_transport == null)
             {
-                throw new InvalidOperationException("Unable to connect to the server with any of the available transports.");
+                if (transportExceptions != null)
+                {
+                    throw new AggregateException("Unable to connect to the server with any of the available transports.", transportExceptions);
+                } else {
+                    var transports = "";
+                    foreach (var transport in serverTransports)
+                    {
+                        transports += $"{transport.Transport},";
+                    }
+                    throw new InvalidOperationException($"The client does not support any of the transports supported by the server. The server supports '{transports.TrimEnd(',')}'.");
+                }
             }
         }
 
