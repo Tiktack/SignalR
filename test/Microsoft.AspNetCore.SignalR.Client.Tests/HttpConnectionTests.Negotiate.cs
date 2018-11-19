@@ -37,18 +37,16 @@ namespace Microsoft.AspNetCore.SignalR.Client.Tests
             }
 
             [Fact]
-            public Task StartThrowsFormatExceptionIfNegotiationResponseHasNoTransports()
+            public Task ConnectionCannotBeStartedIfNoCommonTransportsBetweenClientAndServer()
             {
-                return RunInvalidNegotiateResponseTest<InvalidOperationException>(ResponseUtils.CreateNegotiationContent(transportTypes: 0), "Unable to connect to the server with any of the available transports.");
+                return RunInvalidNegotiateResponseTest<AggregateException>(ResponseUtils.CreateNegotiationContent(transportTypes: HttpTransportType.ServerSentEvents),
+                    $"Unable to connect to the server with any of the available transports. (ServerSentEvents is disabled by the client.)");
             }
 
-            [Theory]
-            [InlineData(HttpTransportType.None)]
-            [InlineData(HttpTransportType.ServerSentEvents)]
-            public Task ConnectionCannotBeStartedIfNoCommonTransportsBetweenClientAndServer(HttpTransportType serverTransports)
+            [Fact]
+            public Task ConnectionCannotBeStartedIfNoTransportProvidedByServer()
             {
-                var transports = serverTransports == HttpTransportType.None ? "" : $" ({serverTransports} is disabled by the client.)";
-                return RunInvalidNegotiateResponseTest<AggregateException>(ResponseUtils.CreateNegotiationContent(transportTypes: serverTransports), $"Unable to connect to the server with any of the available transports.{transports}");
+                return RunInvalidNegotiateResponseTest<InvalidOperationException>(ResponseUtils.CreateNegotiationContent(transportTypes: HttpTransportType.None), "No transports are supported by the server.");
             }
 
             [Theory]

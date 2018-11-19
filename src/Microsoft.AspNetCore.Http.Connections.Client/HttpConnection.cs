@@ -407,7 +407,7 @@ namespace Microsoft.AspNetCore.Http.Connections.Client
                 {
                     throw new AggregateException("Unable to connect to the server with any of the available transports.", transportExceptions);
                 } else {
-                    throw new InvalidOperationException("Unable to connect to the server with any of the available transports.");
+                    throw new InvalidOperationException("No transports are supported by the server.");
                 }
             }
 
